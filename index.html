@@ -68,6 +68,29 @@ h1 { color: #fff; margin-bottom: 8px; letter-spacing: 2px; }
 .cell.x { color: #ff4444; }
 .cell.o { color: #44aaff; }
 
+.difficulty {
+  display: flex; gap: 12px; margin-bottom: 12px;
+}
+
+.difficulty label {
+  color: #fff; cursor: pointer;
+  padding: 4px 16px; border-radius: 6px;
+  background: rgba(255,255,255,0.1);
+  transition: background 0.2s;
+  font-size: 0.9rem;
+}
+
+.difficulty label:hover { background: rgba(255,255,255,0.2); }
+
+.difficulty input { display: none; }
+
+.difficulty input:checked + span {
+  display: inline-block;
+  background: rgba(255,255,255,0.25);
+  border-radius: 4px;
+  padding: 0 6px;
+}
+
 .restart {
   margin-top: 20px; padding: 10px 28px; font-size: 1rem;
   border: none; border-radius: 8px; background: #fff; color: #333;
@@ -84,6 +107,11 @@ h1 { color: #fff; margin-bottom: 8px; letter-spacing: 2px; }
   <div>You (X): <b id="score-x">0</b></div>
   <div>Bot (O): <b id="score-o">0</b></div>
   <div>Draw: <b id="score-d">0</b></div>
+</div>
+<div class="difficulty">
+  <label><input type="radio" name="diff" value="easy" onchange="setDifficulty('easy')"><span>Easy</span></label>
+  <label><input type="radio" name="diff" value="medium" onchange="setDifficulty('medium')"><span>Medium</span></label>
+  <label><input type="radio" name="diff" value="hard" checked onchange="setDifficulty('hard')"><span>Hard</span></label>
 </div>
 <div class="status" id="status">Your turn</div>
 <div class="board-wrap">
@@ -105,6 +133,7 @@ const HUMAN = 'X';
 const BOT = 'O';
 
 let board, turn, gameOver;
+let difficulty = 'hard';
 let scores = { X: 0, O: 0, D: 0 };
 
 const winLines = [
@@ -121,6 +150,13 @@ function cellCenter(i) {
   const row = Math.floor(i / 3);
   const col = i % 3;
   return { x: col * STEP + OFFSET, y: row * STEP + OFFSET };
+}
+
+function setDifficulty(d) { difficulty = d; if (!gameOver && turn === BOT) { /* don't interrupt bot */ } }
+
+function getRandomMove() {
+  const avail = board.map((v, i) => v === '' ? i : null).filter(v => v !== null);
+  return avail[Math.floor(Math.random() * avail.length)];
 }
 
 function buildBoard() {
@@ -160,8 +196,15 @@ function humanMove(i) {
 
 function botMove() {
   if (gameOver) return;
-  const best = minimax(board, BOT);
-  place(best.index, BOT);
+  let idx;
+  if (difficulty === 'easy') {
+    idx = getRandomMove();
+  } else if (difficulty === 'medium') {
+    idx = Math.random() < 0.5 ? getRandomMove() : minimax(board, BOT).index;
+  } else {
+    idx = minimax(board, BOT).index;
+  }
+  place(idx, BOT);
   if (checkEnd()) return;
   turn = HUMAN;
   setTurnClass(HUMAN);
