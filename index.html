@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tic-Tac-Toe</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: system-ui, -apple-system, sans-serif;
+  transition: background 0.5s ease;
+  background: #444;
+}
+body.turn-x { background: #6b0f0f; }
+body.turn-o { background: #0f2b6b; }
+
+h1 { color: #fff; margin-bottom: 8px; letter-spacing: 2px; }
+
+.status {
+  color: #fff; font-size: 1.1rem; margin-bottom: 12px; height: 28px;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+
+.scoreboard {
+  display: flex; gap: 24px; color: #fff; margin-bottom: 12px; font-size: 0.95rem;
+}
+
+.board-wrap {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.board {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, 120px);
+  grid-template-rows: repeat(3, 120px);
+  gap: 4px;
+  background: #000;
+  border-radius: 12px;
+}
+
+.board svg {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  border-radius: 12px;
+}
+
+.cell {
+  width: 120px; height: 120px;
+  background: #1e1e2e;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 3.5rem; font-weight: bold;
+  cursor: pointer; user-select: none;
+  transition: background 0.15s, transform 0.15s;
+}
+.cell:not(.taken):hover { background: #2e2e42; }
+.cell.taken { cursor: default; }
+.cell.x { color: #ff4444; }
+.cell.o { color: #44aaff; }
+
+.restart {
+  margin-top: 20px; padding: 10px 28px; font-size: 1rem;
+  border: none; border-radius: 8px; background: #fff; color: #333;
+  cursor: pointer; transition: transform 0.15s;
+}
+.restart:hover { transform: scale(1.05); }
+.restart:active { transform: scale(0.97); }
+</style>
+</head>
+<body>
+
+<h1>TIC-TAC-TOE</h1>
+<div class="scoreboard">
+  <div>You (X): <b id="score-x">0</b></div>
+  <div>Bot (O): <b id="score-o">0</b></div>
+  <div>Draw: <b id="score-d">0</b></div>
+</div>
+<div class="status" id="status">Your turn</div>
+<div class="board-wrap">
+  <div class="board" id="board">
+    <svg viewBox="0 0 368 368" id="win-svg"></svg>
+  </div>
+</div>
+<button class="restart" onclick="resetGame()">New Game</button>
+
+<script>
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const BOARD_SIZE = 368;
+const CELL = 120;
+const GAP = 4;
+const STEP = CELL + GAP; // 124
+const OFFSET = GAP + CELL / 2; // 64
+
+const HUMAN = 'X';
+const BOT = 'O';
+
+let board, turn, gameOver;
+let scores = { X: 0, O: 0, D: 0 };
+
+const winLines = [
+  [0,1,2],[3,4,5],[6,7,8],
+  [0,3,6],[1,4,7],[2,5,8],
+  [0,4,8],[2,4,6]
+];
+
+const boardEl = document.getElementById('board');
+const svgEl = document.getElementById('win-svg');
+const statusEl = document.getElementById('status');
+
+function cellCenter(i) {
+  const row = Math.floor(i / 3);
+  const col = i % 3;
+  return { x: col * STEP + OFFSET, y: row * STEP + OFFSET };
+}
+
+function buildBoard() {
+  boardEl.querySelectorAll('.cell').forEach(el => el.remove());
+  for (let i = 0; i < 9; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    cell.dataset.i = i;
+    cell.addEventListener('click', () => humanMove(i));
+    boardEl.appendChild(cell);
+  }
+  svgEl.innerHTML = '';
+}
+
+function setTurnClass(t) {
+  document.body.className = t === HUMAN ? 'turn-x' : 'turn-o';
+}
+
+function resetGame() {
+  board = Array(9).fill('');
+  turn = HUMAN;
+  gameOver = false;
+  buildBoard();
+  statusEl.textContent = 'Your turn';
+  setTurnClass(HUMAN);
+}
+
+function humanMove(i) {
+  if (gameOver || board[i]) return;
+  place(i, HUMAN);
+  if (checkEnd()) return;
+  turn = BOT;
+  setTurnClass(BOT);
+  statusEl.textContent = 'Bot is thinking...';
+  setTimeout(botMove, 350);
+}
+
+function botMove() {
+  if (gameOver) return;
+  const best = minimax(board, BOT);
+  place(best.index, BOT);
+  if (checkEnd()) return;
+  turn = HUMAN;
+  setTurnClass(HUMAN);
+  statusEl.textContent = 'Your turn';
+}
+
+function place(i, player) {
+  board[i] = player;
+  const cell = boardEl.querySelector(`.cell[data-i="${i}"]`);
+  cell.textContent = player;
+  cell.classList.add('taken', player === HUMAN ? 'x' : 'o');
+}
+
+function checkEnd() {
+  const w = getWinner(board);
+  if (w) {
+    gameOver = true;
+    scores[w.player]++;
+    updateScores();
+    statusEl.textContent = w.player === HUMAN ? 'You win!' : 'Bot wins!';
+    drawWinLine(w.line);
+    document.body.className = '';
+    return true;
+  }
+  if (board.every(c => c)) {
+    gameOver = true;
+    scores.D++;
+    updateScores();
+    statusEl.textContent = "It's a draw!";
+    document.body.className = '';
+    return true;
+  }
+  return false;
+}
+
+function getWinner(b) {
+  for (const line of winLines) {
+    const [a, c, d] = line;
+    if (b[a] && b[a] === b[c] && b[a] === b[d]) {
+      return { player: b[a], line };
+    }
+  }
+  return null;
+}
+
+function drawWinLine(line) {
+  const p1 = cellCenter(line[0]);
+  const p3 = cellCenter(line[2]);
+  const dx = p3.x - p1.x;
+  const dy = p3.y - p1.y;
+  const len = Math.sqrt(dx * dx + dy * dy);
+
+  const el = document.createElementNS(SVG_NS, 'line');
+  el.setAttribute('x1', p1.x);
+  el.setAttribute('y1', p1.y);
+  el.setAttribute('x2', p3.x);
+  el.setAttribute('y2', p3.y);
+  el.setAttribute('stroke', '#fff');
+  el.setAttribute('stroke-width', '6');
+  el.setAttribute('stroke-linecap', 'round');
+  el.setAttribute('stroke-dasharray', len);
+  el.setAttribute('stroke-dashoffset', len);
+  svgEl.appendChild(el);
+
+  requestAnimationFrame(() => {
+    el.style.transition = 'stroke-dashoffset 0.4s ease-out';
+    el.setAttribute('stroke-dashoffset', '0');
+  });
+}
+
+function updateScores() {
+  document.getElementById('score-x').textContent = scores.X;
+  document.getElementById('score-o').textContent = scores.O;
+  document.getElementById('score-d').textContent = scores.D;
+}
+
+function minimax(b, player) {
+  const avail = b.map((v, i) => v === '' ? i : null).filter(v => v !== null);
+  const w = getWinner(b);
+  if (w) return { score: w.player === BOT ? 10 : -10 };
+  if (avail.length === 0) return { score: 0 };
+
+  const moves = [];
+  for (const i of avail) {
+    b[i] = player;
+    const result = minimax(b, player === BOT ? HUMAN : BOT);
+    moves.push({ index: i, score: result.score });
+    b[i] = '';
+  }
+
+  let best;
+  if (player === BOT) {
+    let bestScore = -Infinity;
+    for (const m of moves) { if (m.score > bestScore) { bestScore = m.score; best = m; } }
+  } else {
+    let bestScore = Infinity;
+    for (const m of moves) { if (m.score < bestScore) { bestScore = m.score; best = m; } }
+  }
+  return best;
+}
+
+resetGame();
+</script>
+</body>
+</html>
